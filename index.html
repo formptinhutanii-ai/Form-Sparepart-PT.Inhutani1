@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Form Permintaan Spare Part</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--tx:#1d2330;--mu:#677084;--bd:#d8dce4;--ac:#1f6feb;--ok:#1a7f37;--er:#c62828}
+@media (prefers-color-scheme:dark){:root{--bg:#14171d;--card:#1d222b;--tx:#e8ebf1;--mu:#9aa3b5;--bd:#333b4a;--ac:#5b9bff;--ok:#4cc26a;--er:#ff7b72}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,sans-serif;padding:16px}
+.w{max-width:900px;margin:0 auto}
+h1{font-size:20px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:14px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+label{display:block;font-size:12px;color:var(--mu);margin-bottom:4px}
+input,select{width:100%;padding:9px;border:1px solid var(--bd);border-radius:7px;background:var(--bg);color:var(--tx);font:inherit}
+.row{display:grid;grid-template-columns:2.2fr .8fr .9fr 1.8fr auto;gap:8px;align-items:end;padding:10px 0;border-top:1px dashed var(--bd)}
+.row:first-of-type{border-top:0}
+button{padding:9px 14px;border-radius:7px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font:inherit;cursor:pointer}
+button:disabled{opacity:.6;cursor:not-allowed}
+.pri{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+.x{color:var(--er)}
+#msg{margin-top:10px;font-weight:600}
+@media(max-width:640px){.row{grid-template-columns:1fr 1fr}.row>div:first-child,.row>div:nth-child(4){grid-column:1/-1}}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>Form Permintaan Pembelian Spare Part</h1>
+
+<div class="card g">
+  <div><label>Tanggal Pengajuan</label><input type="date" id="tgl"></div>
+  <div><label>Jam Pengajuan</label><input type="time" id="jam"></div>
+  <div><label>Nama Pemohon</label><input id="nama" placeholder="Nama"></div>
+  <div><label>Bagian/Divisi</label>
+    <select id="div"><option value="">Pilih…</option></select></div>
+</div>
+
+<div class="card">
+  <div id="items"></div>
+  <button type="button" onclick="addRow()">+ Tambah barang</button>
+</div>
+
+<button class="pri" id="kirim" onclick="kirim()">Kirim Permintaan</button>
+<div id="msg"></div>
+</div>
+
+<datalist id="dl"></datalist>
+
+<datalist id="dk"><option value="u/ Produksi"><option value="u/ Packing"><option value="u/ Maintenance"><option value="u/ KD"><option value="u/ IK"><option value="u/ Kantor"><option value="u/ Kantor Atas"><option value="u/ Pengasahan"><option value="u/ Mesin Moulding"><option value="u/ Mesin GF"><option value="u/ Mesin FJ Ishita"><option value="u/ Mesin FJ lida"><option value="u/ Forklift FD 35/03"><option value="u/ Forklift FD 35/04"><option value="u/ Pick Up"><option value="u/ Perawatan"><option value="u/ Blower Produksi"><option value="u/ Gudang"><option value="u/ Mess"><option value="u/ Umum"></datalist>
+
+<script>
+// ====== PENGATURAN (edit sesuai kebutuhan) ======
+// Alamat Apps Script (link /exec dari Deploy > Aplikasi web)
+const API_URL = "https://script.google.com/macros/s/AKfycbzhnUUG3oKJuM8JXi36RMEmugYdyVG7_EzuxXQJauIbeWmCbbUu3jVFk0Hj3yfSthaO/exec";
+
+const DIVISI = ["Gudang","Produksi","Kantor","Teknik","Lainnya"];
+const SATUAN = ["Pcs","Roll","Unit","Set","Mtr","Ltr","Kg","Dus","Krds","Box","Pack","Pak","Paket","Btl","Botol","Kaleng","Galon","Sak","Lusin","Bungkus","Batang"];
+// Katalog: nama barang -> satuan & keterangan bawaan. Tambah baris sendiri.
+const KATALOG = {
+  "Lem G":{s:"Pcs",k:"u/ Produksi"},
+  "Lem CA N Bond":{s:"Pcs",k:"u/ Produksi"},
+  "Plastik Film":{s:"Roll",k:"u/ Packing"},
+  "Straping Band":{s:"Roll",k:"u/ Packing"},
+  "Straping Band Kuning":{s:"Roll",k:"u/ Packing"},
+  "Tali Straping Bang Kuning Kecil":{s:"Pcs",k:"u/ IK Gresik"},
+  "Klem Galvanis":{s:"Pcs",k:"u/ Packing"},
+  "Karton Single Face":{s:"Kg",k:"u/ Packing"},
+  "Plastik Siku (Corner)":{s:"Kg",k:"u/ Packing"},
+  "Paku 2\"":{s:"Kg",k:"u/ Packing"},
+  "Van Belt":{s:"Pcs",k:"u/ Mesin Sander"},
+  "Variable Speed Belt":{s:"Pcs",k:"u/ Mesin Moulding IK"},
+  "Bearing":{s:"Pcs",k:"u/ Mesin Moulding"},
+  "Oil Seal":{s:"Pcs",k:"u/ FD 35/04"},
+  "Seal Forklift":{s:"Pcs",k:"u/ Forklift FD 03"},
+  "Baut":{s:"Pcs",k:"u/ FD 35/04"},
+  "Mur Baut":{s:"Pcs",k:"u/ Produksi"},
+  "Thiner B":{s:"Ltr",k:"u/ Umum"},
+  "Kuas 3\"":{s:"Pcs",k:"u/ Umum"},
+  "Cleaning AC":{s:"Unit",k:"u/ Kantor Atas"},
+  "Tambah Freon":{s:"Unit",k:"u/ Kantor Atas"},
+  "Pipa AC":{s:"Mtr",k:"u/ Kantor Atas"},
+  "Masker":{s:"Box",k:"u/ Produksi"},
+  "Sarung Tangan":{s:"Lusin",k:"u/ Produksi"},
+  "Krayon":{s:"Pack",k:"u/ Produksi"},
+  "Meteran 5 Mtr":{s:"Pcs",k:"u/ Produksi"},
+  "Kalsium":{s:"Sak",k:"u/ Produksi"},
+  "Kain Majun":{s:"Kg",k:"u/ Produksi"},
+  "Skun 50-10":{s:"Pcs",k:"u/ Blower Produksi"},
+  "Inlite LED Capsule 50 W":{s:"Pcs",k:"u/ Kantor"},
+  "Fitting Besi E-27":{s:"Pcs",k:"u/ Kantor"},
+  "Philips Ecofit Batten 16 W":{s:"Pcs",k:"u/ Kantor"},
+  "Broco Fitting Plavon":{s:"Pcs",k:"u/ Produksi"},
+  "Amplas":{s:"Mtr",k:"u/ Kantor"},
+  "Kertas A4":{s:"Krds",k:"u/ Kantor Atas"},
+  "PI Bond 3436":{s:"Pcs",k:"u/ Gudang"},
+  "WD 40":{s:"Pcs",k:"u/ Pengasahan"},
+  "Water Coolant":{s:"Ltr",k:"u/ Pengasahan"},
+  "Minyak Rem Prestone":{s:"Btl",k:"u/ Forklift FD 35/03"},
+  "Tambal Ban":{s:"Pcs",k:"u/ Forklift FD 35/04"},
+  "Bongkar Pasang Ban":{s:"Pcs",k:"u/ Forklift FD 03"},
+  "Selang":{s:"Mtr",k:"u/ KD"},
+  "Klem Selang":{s:"Pcs",k:"u/ KD"},
+  "Asitelin":{s:"Botol",k:"u/ Maintenance"},
+  "Oksigen":{s:"Botol",k:"u/ Maintenance"},
+  "Olie Turalik 43":{s:"Ltr",k:"u/ Perawatan"},
+  "Rewinding Dinamo 3 Kw":{s:"Pcs",k:"u/ KD"},
+  "Jarum MC Bollmann":{s:"Pcs",k:"u/ KD"},
+  "Timer Theben":{s:"Pcs",k:"u/ KD"},
+  "Kontaktor":{s:"Pcs",k:"u/ Mesin GF"},
+  "Bishilite # 12 G":{s:"Pcs",k:"u/ IK"},
+  "Dempul":{s:"Pak",k:"u/ Produksi"}
+};
+// =================================================
+const $=id=>document.getElementById(id);
+DIVISI.forEach(d=>$("div").add(new Option(d,d)));
+$("dl").innerHTML=Object.keys(KATALOG).map(n=>`<option value="${n.replace(/"/g,"&quot;")}">`).join("");
+const now=new Date(),p=n=>String(n).padStart(2,"0");
+$("tgl").value=`${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())}`;
+$("jam").value=`${p(now.getHours())}:${p(now.getMinutes())}`;
+
+function addRow(){
+  const r=document.createElement("div");r.className="row";
+  r.innerHTML=`<div><label>Nama Barang</label><input class="n" list="dl" placeholder="Ketik / pilih barang"></div>
+  <div><label>Jumlah</label><input class="j" type="number" min="1" value="1"></div>
+  <div><label>Satuan</label><select class="s">${SATUAN.map(s=>`<option>${s}</option>`).join("")}</select></div>
+  <div><label>Keterangan</label><input class="k" list="dk" placeholder="u/ ..."></div>
+  <button type="button" class="x" title="Hapus" onclick="this.parentNode.remove()">✕</button>`;
+  r.querySelector(".n").addEventListener("input",e=>{
+    const m=KATALOG[e.target.value];
+    if(m){r.querySelector(".s").value=m.s;r.querySelector(".k").value=m.k;}
+  });
+  $("items").appendChild(r);
+}
+addRow();
+
+async function kirim(){
+  const msg=$("msg");msg.style.color="var(--er)";
+  const items=[...document.querySelectorAll("#items .row")].map(r=>({
+    nama:r.querySelector(".n").value.trim(),
+    jumlah:r.querySelector(".j").value,
+    satuan:r.querySelector(".s").value,
+    ket:r.querySelector(".k").value.trim()
+  })).filter(i=>i.nama);
+  if(!$("nama").value.trim()||!$("div").value){msg.textContent="Isi nama pemohon dan bagian/divisi.";return;}
+  if(!items.length){msg.textContent="Isi minimal satu barang.";return;}
+  const data={tanggal:$("tgl").value,jam:$("jam").value,nama:$("nama").value.trim(),divisi:$("div").value,items};
+  $("kirim").disabled=true;msg.style.color="var(--mu)";msg.textContent="Mengirim…";
+  try{
+    // text/plain dipakai agar browser tidak mengirim preflight (CORS) ke Apps Script
+    const res=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(data)});
+    const out=await res.json();
+    if(!out.ok) throw new Error(out.error||"Server menolak data");
+    msg.style.color="var(--ok)";msg.textContent="Terkirim ✔ No. Inv "+out.inv+" ("+items.length+" barang)";
+    $("items").innerHTML="";addRow();
+  }catch(e){msg.style.color="var(--er)";msg.textContent="Gagal: "+((e&&e.message)?e.message:String(e));}
+  $("kirim").disabled=false;
+}
+</script>
+</body>
+</html>
